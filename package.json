@@ -1,8 +1,8 @@
 {
-  "name": "homebridge-httptemperaturehumidity",
-  "version": "0.0.17",
-  "description": "https plugin for homebridge",
-  "license": "ISC",
+  "name": "homebridge-http-temperature-humidity",
+  "version": "0.1.0",
+  "description": "HTTP fetch Temperarature and Humidity sensor plugin for Homebridge with JSONata support.",
+  "license": "MIT",
   "keywords": [
     "homebridge-plugin"
   ],
@@ -11,15 +11,16 @@
     "homebridge": ">=0.2.0"
   },
   "author": {
-    "name": "Luca Critelli"
+    "name": "Marek Serafin"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/lucacri/homebridge-http-temperature-humidity.git"
+    "url": "git://github.com/stoprocent/homebridge-http-temperature-humidity.git"
   },
   "dependencies": {
-    "cache-service-cache-module": "^1.2.4",
-    "superagent": "^3.3.1",
-    "superagent-cache-plugin": "^1.0.0"
+    "cache-service-cache-module": "^2.0.1",
+    "superagent": "^5.1.3",
+    "superagent-cache-plugin": "^2.1.0",
+    "jsonata": "^1.7.0"
   }
 }
