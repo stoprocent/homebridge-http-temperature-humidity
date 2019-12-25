@@ -1,38 +1,44 @@
 var Service, Characteristic;
-var request = require("superagent");
+const request = require("superagent");
+const jsonata = require("jsonata");
+const fs = require('fs');
 
 // Require and instantiate a cache module
-var cacheModule = require("cache-service-cache-module");
-var cache = new cacheModule({storage: "session", defaultExpiration: 60});
+const cacheModule = require("cache-service-cache-module");
+const cache = new cacheModule({storage: "session", defaultExpiration: 60});
 
 // Require superagent-cache-plugin and pass your cache module
-var superagentCache = require("superagent-cache-plugin")(cache);
+const superagentCache = require("superagent-cache-plugin")(cache);
 
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
-    homebridge.registerAccessory("homebridge-httptemperaturehumidity", "HttpTemphum", HttpTemphum);
+
+    homebridge.registerAccessory("homebridge-http-temperature-humidity", "HTTPTempHum", HTTPTempHum);
 }
 
-function HttpTemphum(log, config) {
+function HTTPTempHum(log, config) {
     this.log = log;
 
     // Configuration
-    this.url             = config["url"];
-    this.httpMethod      = config["httpMethod"] || "GET";
-    this.name            = config["name"];
-    this.manufacturer    = config["manufacturer"] || "Generic";
-    this.model           = config["model"] || "HTTP(S)";
-    this.serial          = config["serial"] || "";
-    this.humidity        = config["humidity"];
-    this.lastUpdateAt    = config["lastUpdateAt"] || null;
-    this.cacheExpiration = config["cacheExpiration"] || 60;
+    this.url                = config["url"];
+    this.method             = config["method"] || "GET";
+    this.name               = config["name"];
+    this.manufacturer       = config["manufacturer"] || "Generic";
+    this.model              = config["model"] || "Sensor";
+    this.serial             = config["serial"] || "";
+    this.humidityQuery      = config["humidityQuery"] || null;
+    this.temperatureQuery   = config["temperatureQuery"] || null;
+    this.lastUpdateAt       = config["lastUpdateAt"] || null;
+    this.cacheExpiration    = config["cacheExpiration"] || 60;
+    this.certificateCA      = config["certificateCA"] !== undefined ? fs.readFileSync(config["certificateCA"]) : null;
 }
 
-HttpTemphum.prototype = {
+HTTPTempHum.prototype = {
 
     getRemoteState: function(service, callback) {
-        request(this.httpMethod, this.url)
+        request(this.method, this.url)
+          .ca(this.certificateCA)
           .set("Accept", "application/json")
           .use(superagentCache)
           .expiration(this.cacheExpiration)
@@ -42,29 +48,50 @@ HttpTemphum.prototype = {
                 callback(err);
             } else {
                 this.log(`HTTP success (${key})`);
+                // Temperature
+                let temperature;
+                if (this.temperatureQuery !== null) {
+                    // Query Result
+                    try {
+                        temperature = jsonata(this.temperatureQuery).evaluate(res.body);
+                    }
+                    catch (error) {
+                        callback(error);
+                        return;
+                    }
 
-                this.temperatureService.setCharacteristic(
-                    Characteristic.CurrentTemperature,
-                    res.body.temperature
-                );
-                this.temperature = res.body.temperature;
+                    this.temperatureService.setCharacteristic(
+                        Characteristic.CurrentTemperature,
+                        temperature
+                    );
+                }
 
-                if (this.humidity !== false) {
+                // Humidity
+                let humidity;
+                if (this.humidityQuery !== null) {
+                    // Query Result
+                    try {
+                        humidity = jsonata(this.humidityQuery).evaluate(res.body);
+                    }
+                    catch (error) {
+                        callback(error);
+                        return;
+                    }
+
                     this.humidityService.setCharacteristic(
                         Characteristic.CurrentRelativeHumidity,
-                        res.body.humidity
+                        humidity
                     );
-                    this.humidity = res.body.humidity;
                 }
 
                 this.lastUpdateAt = +Date.now();
 
                 switch (service) {
                     case "temperature":
-                        callback(null, this.temperature);
+                        callback(null, temperature);
                         break;
                     case "humidity":
-                        callback(null, this.humidity);
+                        callback(null, humidity);
                         break;
                     default:
                         var error = new Error("Unknown service: " + service);
@@ -92,14 +119,18 @@ HttpTemphum.prototype = {
             .setCharacteristic(Characteristic.SerialNumber, this.serial);
         services.push(informationService);
 
-        this.temperatureService = new Service.TemperatureSensor(this.name);
-        this.temperatureService
-            .getCharacteristic(Characteristic.CurrentTemperature)
-            .setProps({ minValue: -273, maxValue: 200 })
-            .on("get", this.getTemperatureState.bind(this));
-        services.push(this.temperatureService);
-
-        if (this.humidity !== false) {
+        // Temperature
+        if (this.temperatureQuery !== null) {
+            this.temperatureService = new Service.TemperatureSensor(this.name);
+            this.temperatureService
+                .getCharacteristic(Characteristic.CurrentTemperature)
+                .setProps({ minValue: -273, maxValue: 200 })
+                .on("get", this.getTemperatureState.bind(this));
+            services.push(this.temperatureService);
+        }
+        
+        // Humidity
+        if (this.humidityQuery !== null) {
             this.humidityService = new Service.HumiditySensor(this.name);
             this.humidityService
                 .getCharacteristic(Characteristic.CurrentRelativeHumidity)

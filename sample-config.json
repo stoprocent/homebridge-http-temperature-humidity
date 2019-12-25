@@ -12,11 +12,12 @@
 
     "accessories": [
         {
-            "accessory": "HttpTemphum",
+            "accessory": "HTTPTempHum",
             "name": "Living Room Weather",
-            "url": "http://192.168.1.210/weather",
-            "httpMethod": "GET",
-            "humidity": true,
+            "url": "https://192.168.1.231:8086/query?q=SELECT median(temperature), median(humidity) FROM telemetry.autogen.telemetry WHERE sensorId='SensorID' AND time > now()-1m",
+            "method": "GET",
+            "humidityQuery": "results[0].series[0].values[0][2]",
+            "temperatureQuery": "results[0].series[0].values[0][1]",
             "cacheExpiration": 60
         }
     ]
