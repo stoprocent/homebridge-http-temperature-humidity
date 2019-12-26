@@ -17,6 +17,20 @@ module.exports = function (homebridge) {
     homebridge.registerAccessory("homebridge-http-temperature-humidity", "HTTPTempHum", HTTPTempHum);
 }
 
+function JSONataQuery(query, data) {
+    let value = undefined;
+    if (query !== null) {
+        // Query Result
+        try {
+            value = jsonata(query).evaluate(data);
+        }
+        catch (error) {
+
+        }
+    }
+    return value;
+}
+
 function HTTPTempHum(log, config) {
     this.log = log;
 
@@ -27,6 +41,8 @@ function HTTPTempHum(log, config) {
     this.manufacturer       = config["manufacturer"] || "Generic";
     this.model              = config["model"] || "Sensor";
     this.serial             = config["serial"] || "";
+    this.batteryQuery       = config["batteryQuery"] || null;
+    this.batteryLow         = config["batteryLow"] || 20;
     this.humidityQuery      = config["humidityQuery"] || null;
     this.temperatureQuery   = config["temperatureQuery"] || null;
     this.lastUpdateAt       = config["lastUpdateAt"] || null;
@@ -48,45 +64,32 @@ HTTPTempHum.prototype = {
                 callback(err);
             } else {
                 this.log(`HTTP success (${key})`);
-                // Temperature
-                let temperature;
-                if (this.temperatureQuery !== null) {
-                    // Query Result
-                    try {
-                        temperature = jsonata(this.temperatureQuery).evaluate(res.body);
-                    }
-                    catch (error) {
-                        callback(error);
-                        return;
-                    }
 
-                    this.temperatureService.setCharacteristic(
-                        Characteristic.CurrentTemperature,
-                        temperature
-                    );
+                // Battery
+                let battery = JSONataQuery(this.batteryQuery, res.body);
+                if (battery !== undefined) {
+                    this.batteryService.setCharacteristic(Characteristic.BatteryLevel, battery);
+                    this.batteryService.setCharacteristic(Characteristic.StatusLowBattery, battery <= this.batteryLow ? 1 : 0);
+                }
+
+                // Temperature
+                let temperature = JSONataQuery(this.temperatureQuery, res.body);
+                if (temperature !== undefined) {
+                    this.temperatureService.setCharacteristic(Characteristic.CurrentTemperature, temperature);
                 }
 
                 // Humidity
-                let humidity;
-                if (this.humidityQuery !== null) {
-                    // Query Result
-                    try {
-                        humidity = jsonata(this.humidityQuery).evaluate(res.body);
-                    }
-                    catch (error) {
-                        callback(error);
-                        return;
-                    }
-
-                    this.humidityService.setCharacteristic(
-                        Characteristic.CurrentRelativeHumidity,
-                        humidity
-                    );
+                let humidity = JSONataQuery(this.humidityQuery, res.body);
+                if (humidity !== undefined) {
+                    this.humidityService.setCharacteristic(Characteristic.CurrentRelativeHumidity, humidity);
                 }
 
                 this.lastUpdateAt = +Date.now();
 
                 switch (service) {
+                    case "battery":
+                        callback(null, battery);
+                        break;
                     case "temperature":
                         callback(null, temperature);
                         break;
@@ -99,6 +102,10 @@ HTTPTempHum.prototype = {
                 }
             }
         }.bind(this));
+    },
+
+    getBatteryState: function(callback) {
+        this.getRemoteState("battery", callback);
     },
 
     getTemperatureState: function(callback) {
@@ -118,6 +125,16 @@ HTTPTempHum.prototype = {
             .setCharacteristic(Characteristic.Model, this.model)
             .setCharacteristic(Characteristic.SerialNumber, this.serial);
         services.push(informationService);
+
+        // Battery
+        if (this.batteryQuery !== null) {
+            this.batteryService = new Service.BatteryService(this.name);
+            this.batteryService.getCharacteristic(Characteristic.ChargingState).updateValue(2)
+            this.batteryService.getCharacteristic(Characteristic.StatusLowBattery).updateValue(0)
+            this.batteryService.getCharacteristic(Characteristic.BatteryLevel).updateValue(54)
+            this.batteryService.getCharacteristic(Characteristic.BatteryLevel).on("get", this.getBatteryState.bind(this));
+            services.push(this.batteryService);
+        }
 
         // Temperature
         if (this.temperatureQuery !== null) {
