@@ -90,6 +90,9 @@ HTTPTempHum.prototype = {
                     case "battery":
                         callback(null, battery);
                         break;
+                    case "batteryLow":
+                        callback(null, battery <= this.batteryLow ? 1 : 0);
+                        break;
                     case "temperature":
                         callback(null, temperature);
                         break;
@@ -102,6 +105,10 @@ HTTPTempHum.prototype = {
                 }
             }
         }.bind(this));
+    },
+
+    getBatteryLowState: function(callback) {
+        this.getRemoteState("batteryLow", callback);
     },
 
     getBatteryState: function(callback) {
@@ -130,8 +137,7 @@ HTTPTempHum.prototype = {
         if (this.batteryQuery !== null) {
             this.batteryService = new Service.BatteryService(this.name);
             this.batteryService.getCharacteristic(Characteristic.ChargingState).updateValue(2)
-            this.batteryService.getCharacteristic(Characteristic.StatusLowBattery).updateValue(0)
-            this.batteryService.getCharacteristic(Characteristic.BatteryLevel).updateValue(54)
+            this.batteryService.getCharacteristic(Characteristic.StatusLowBattery).on("get", this.getBatteryLowState.bind(this));
             this.batteryService.getCharacteristic(Characteristic.BatteryLevel).on("get", this.getBatteryState.bind(this));
             services.push(this.batteryService);
         }
