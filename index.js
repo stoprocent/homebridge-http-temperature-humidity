@@ -61,6 +61,8 @@ HTTPTempHum.prototype = {
           .end(function(err, res, key) {
             if (err) {
                 this.log(`HTTP failure (${this.url})`);
+                this.temperatureService.setCharacteristic(Characteristic.StatusFault, 1);
+                this.humidityService.setCharacteristic(Characteristic.StatusFault, 1);
                 callback(err);
             } else {
                 this.log(`HTTP success (${key})`);
@@ -75,12 +77,14 @@ HTTPTempHum.prototype = {
                 // Temperature
                 let temperature = JSONataQuery(this.temperatureQuery, res.body);
                 if (temperature !== undefined) {
+                    this.temperatureService.setCharacteristic(Characteristic.StatusFault, 0);
                     this.temperatureService.setCharacteristic(Characteristic.CurrentTemperature, temperature);
                 }
 
                 // Humidity
                 let humidity = JSONataQuery(this.humidityQuery, res.body);
                 if (humidity !== undefined) {
+                    this.humidityService.setCharacteristic(Characteristic.StatusFault, 0);
                     this.humidityService.setCharacteristic(Characteristic.CurrentRelativeHumidity, humidity);
                 }
 
